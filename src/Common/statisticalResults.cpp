@@ -8,7 +8,7 @@
  *	Description:																	*
  * 		Objects of the classes defined in this file are used to keep record         *
  *  of measures during sequences of tests (see, for e.g., the functions under       *
- *  src/testers/). In some cases they also keep the current averages of certain     *
+ *  testers/). In some cases they also keep the current averages of certain        *
  *  measures.                                                                       *
  * 																					*
  ************************************************************************************/
