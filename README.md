@@ -1,79 +1,126 @@
 # Heavy MinOTAut
 
-Heavy Minimization algorithms for Tree Automata
+Heavy MinOTAut (Heavy Minimization Of Tree Automata) is a C++ command-line
+tool for reducing nondeterministic tree automata. It implements the Heavy
+minimization techniques based on lookahead downward and upward simulations,
+with optional saturation-based reductions.
 
-Copyright (c) 2014-16 Ricardo Almeida (LFCS - University of Edinburgh)
+The program reads automata in Timbuk format and uses libvata for automaton
+parsing, serialization, and core operations.
 
-## Downloading
+## Project status
+
+This is research software accompanying work on tree-automata reduction. The
+main algorithms are exposed through the CLI; the `testers/` directory contains
+the processing and measurement routines used by those commands. See
+[Publications](#publications) for the related research.
+
+## Quick start
+
+### Requirements
+
+- CMake 3.20 or newer
+- Git (to fetch libvata on the first configure)
+- A C++ compiler with C++11 support
+- Boost filesystem and system development libraries (version 1.54 or newer)
+- Network access on the first configure
+
+### Build
 
 ```sh
 git clone https://github.com/ric-almeida/heavy-minotaut.git
-```
-
-## Prerequisites
-
-- CMake 3.20 or newer
-- A C++ compiler with C++11 support
-- Boost filesystem and system development libraries (version 1.54.0 or newer)
-
-## Building
-
-From the repository root:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cd heavy-minotaut
+cmake -S . -B build
 cmake --build build --parallel
 ```
 
-The first configure fetches libvata from its upstream Git repository, so Git and
-network access are required. CMake builds libvata's library target directly,
-without its separate CLI and test suite. The dependency is pinned to a specific
-upstream revision in [CMakeLists.txt](./CMakeLists.txt), rather than tracking the
-upstream default branch.
+If no build type is specified, CMake defaults to `Release`. With GCC and Clang,
+Release builds use `-O3` optimisations.
 
-Run the command-line smoke test with:
+Building in debug mode:
 
 ```sh
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug --parallel
+```
+
+Run the CLI help or the registered smoke test:
+
+```sh
+./build/minotaut -help
 ctest --test-dir build --output-on-failure
 ```
 
-Install the executable under a chosen prefix with:
+To install the executable:
 
 ```sh
-cmake --install build --prefix /your/install/prefix
+cmake --install build --prefix "$HOME/.local"
 ```
 
-## Input format
+The build fetches libvata from its upstream Git repository at the immutable
+revision pinned in [CMakeLists.txt](./CMakeLists.txt). CMake builds libvata's
+library target directly.
 
-libvata supports the Timbuk format of tree automata. Its grammar is specified
-below, with `<file>` as the start symbol:
+## Command-line modes
 
-```text
-<file>            : 'Ops' <label_list> <automaton>
+| Command | Purpose |
+| --- | --- |
+| `minimize` | Apply Heavy using downward and upward lookahead. |
+| `minimize_with_saturation` | Apply Heavy followed by saturation-based reductions. |
+| `minimize_and_complement` | Minimize an automaton, then complement it. |
+| `complement` | Complement an automaton without first minimizing it. |
+| `compute_la-dw-sim` | Compute lookahead downward simulations for automata in directories. |
 
-<label_list>      : <label_decl> <label_decl> ... // a list of label declarations
+Pass `-help` to see the complete option list. A command takes one or more
+input files by default; use `-input_format=dir` to process files in a directory.
+The `-output=DIR` option writes transformed automata to that directory. Without
+it, commands report measurements without writing automata.
 
-<label_decl>      : string ':' int // a symbol declaration (the name and arity)
+## Examples
 
-<automaton>       : 'Automaton' string 'States' <state_list> 'Final States' <state_list> 'Transitions' <transition_list>
+[`examples/sample.timbuk`](./examples/sample.timbuk) is a small Timbuk
+automaton. From the repository root, apply Heavy with downward and upward
+lookahead 1:
 
-<state_list>      : <state> <state> ... // a list of states
-
-<state>           : string // the name of a state
-
-<transition_list> : <transition> <transition> ... // a list of transitions
-
-<transition>      : <label> '(' <state> ',' <state> ',' ... ')' '->' <state> // a transition
-
-<label>           : string // the name of a label
+```sh
+./build/minotaut minimize -output=out 1 1 examples/sample.timbuk
 ```
 
-For example:
+The minimized automaton is written under `out/` with a name similar to
+`sample_minimized_with_Heavy(1,1).timbuk`. Omit `-output=out` to print the
+measurements without saving the resulting automaton. The output directory is
+created automatically when it does not exist.
+
+To enable saturation-based reductions, provide the two additional saturation
+lookahead values:
+
+```sh
+./build/minotaut minimize_with_saturation -output=out 1 1 1 1 examples/sample.timbuk
+```
+
+The four numbers are, in order, downward and upward lookahead for Heavy,
+followed by downward and upward lookahead for saturation. The output is named
+similar to `sample_minimized_with_Heavy(1,1)_with_Saturation(1,1).timbuk`.
+The saturation version defaults to 2; use `-sat_version=N` to select another
+version.
+
+For a directory containing Timbuk files, add `-input_format=dir` and pass the
+directory instead of an individual file:
+
+```sh
+./build/minotaut minimize -input_format=dir 1 1 path/to/automata/
+```
+
+## Timbuk input format
+
+A Timbuk file declares symbols and their arities, states, final states, and
+transitions. A transition has the form `symbol(child_state, ...) -> state`;
+for a rank-zero symbol, use `symbol() -> state`. For example:
 
 ```text
 Ops a:0 b:1 c:2
 
-Automaton A
+Automaton Sample
 States q0 q1 q2
 Final States q2
 Transitions
@@ -84,9 +131,22 @@ c(q1, q1) -> q2
 c(q2, q2) -> q2
 ```
 
-## Usage
+The sample describes a rank-zero symbol `a`, a unary symbol `b`, and a binary
+symbol `c`. State names and transition destinations are declared in the
+automaton; final states determine acceptance.
 
-Run `build/minotaut -help` for command-line options.
+## Repository layout
+
+- `src/` - minimization algorithms and shared implementation
+- `include/` - application entry-point declarations
+- `testers/` - CLI processing and measurement routines
+- `examples/` - small Timbuk inputs for trying the CLI
+- `test-data/` - archived automata collection
+
+## License
+
+This project is distributed under the GNU General Public License, version 2;
+see [LICENSE](./LICENSE).
 
 ## Publications
 

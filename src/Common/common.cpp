@@ -196,12 +196,21 @@ bool convertStrToBool(string str)
 
 void writeToFile(string filename, string text, bool overwrite)
 {
+    boost::filesystem::path path(filename);
+    if (path.has_parent_path())
+        createDir(path.parent_path().string());
 
     std::ofstream out;
     // std::ios::app is the open mode "append" meaning
     // new data will be written to the end of the file.
     out.open(filename, overwrite ? std::ios::trunc : std::ios::app);
+    if (!out.is_open())
+        exit_with_error("Error opening file " + filename);
+
     out << text;
+    out.flush();
+    if (!out)
+        exit_with_error("Error writing to file " + filename);
 
 }
 
